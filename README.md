@@ -274,18 +274,6 @@ If you encounter any issues or have questions:
 2. Open an issue on [GitHub](https://github.com/LiteObject/TypeRight/issues)
 3. Make sure Ollama is properly installed and running
 
-## Roadmap
-
-- [ ] Support for more languages
-- [ ] Custom dictionary/style preferences
-- [ ] Inline suggestions (tooltips)
-- [ ] Keyboard shortcuts
-- [ ] Context menu integration
-- [ ] Settings page
-- [ ] Multiple AI model selection in UI
-- [ ] Performance optimizations
-- [ ] Firefox extension version
-
 ---
 
 **Made by [LiteObject](https://github.com/LiteObject)**
