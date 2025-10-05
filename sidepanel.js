@@ -226,12 +226,12 @@ function createSuggestionCard(data) {
     let alternativeHTML = '';
     if (alternative) {
         alternativeHTML = `
-            <div class="text-section">
-                <div class="text-label" style="color: #0056b3; display: flex; justify-content: space-between; align-items: center;">
+            <div class="text-section text-section-alternative">
+                <div class="text-label">
                     <span>Alternative Suggestion</span>
-                    <a href="#" class="copy-link" data-text="${escapeHtml(alternative)}" style="font-size: 13px; color: #5a6268; text-decoration: none;">Copy</a>
+                    <a href="#" class="copy-link copy-link-alt" data-text="${escapeHtml(alternative)}">Copy</a>
                 </div>
-                <div class="text-content" style="border-left-color: #0056b3;">${escapeHtml(alternative)}</div>
+                <div class="text-content">${escapeHtml(alternative)}</div>
             </div>
         `;
     }
@@ -248,7 +248,7 @@ function createSuggestionCard(data) {
     const titleText = isNoIssues ? 'No issues found' : 'Grammar Suggestion';
     const originalLabel = 'Original Text';
     const bannerHTML = isNoIssues
-        ? `<div class="no-issues-banner" style="background: #e6f4ea; color: #0b6b2f; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; font-weight: 600;">
+        ? `<div class="no-issues-banner">
                         ${escapeHtml(suggestion || 'Your text looks good! No grammar issues found.')}
                     </div>`
         : '';
@@ -257,9 +257,9 @@ function createSuggestionCard(data) {
     if (showRevisedSection) {
         revisedSection = `
         <div class="text-section">
-            <div class="text-label label-corrected" style="display: flex; justify-content: space-between; align-items: center;">
+            <div class="text-label label-corrected">
                 <span>Revised</span>
-                <a href="#" class="copy-link" data-text="${escapeHtml(displayRevised)}" style="font-size: 13px; color: #5a6268; text-decoration: none;">Copy</a>
+                <a href="#" class="copy-link" data-text="${escapeHtml(displayRevised)}">Copy</a>
             </div>
             <div class="text-content text-corrected">${escapeHtml(displayRevised)}</div>
         </div>
@@ -294,15 +294,16 @@ function createSuggestionCard(data) {
     copyLinks.forEach(copyLink => {
         copyLink.addEventListener('click', (e) => {
             e.preventDefault();
-            const textToCopy = copyLink.getAttribute('data-text');
+            const textToCopy = copyLink.getAttribute('data-text') ?? '';
             copyToClipboard(textToCopy);
-            const originalLabel = copyLink.textContent;
-            const originalColor = copyLink.style.color;
+            const originalLabel = copyLink.dataset.originalText ?? copyLink.textContent;
+            copyLink.dataset.originalText = originalLabel;
             copyLink.textContent = 'Copied';
-            copyLink.style.color = '#28a745';
+            copyLink.classList.add('is-copied');
             setTimeout(() => {
-                copyLink.textContent = originalLabel;
-                copyLink.style.color = originalColor;
+                copyLink.textContent = copyLink.dataset.originalText || 'Copy';
+                delete copyLink.dataset.originalText;
+                copyLink.classList.remove('is-copied');
             }, 1500);
         });
     });
