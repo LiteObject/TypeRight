@@ -9,6 +9,7 @@ const CONFIG = {
     model: 'llama3.2:latest', // Using llama3.2:latest for the newest version
     maxRetries: 2,
     requestTimeout: 30000, // 30 seconds
+    minTextLength: 25,
 };
 
 // State management
@@ -231,8 +232,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  */
 async function handleGrammarCheck(message, tabId) {
     const { text, elementId } = message;
+    const normalizedText = (text || '').trim();
 
-    console.log('TypeRight: Checking grammar for text length:', text.length);
+    if (normalizedText.length < CONFIG.minTextLength) {
+        console.log('TypeRight: Ignoring grammar check below minimum length');
+        return;
+    }
+
+    console.log('TypeRight: Checking grammar for text length:', normalizedText.length);
 
     try {
         const panelConnectedInitially = hasSidePanelConnection(tabId);
@@ -248,7 +255,7 @@ async function handleGrammarCheck(message, tabId) {
         }
 
         // Call AI service to check grammar
-        const result = await checkGrammarWithAI(text);
+        const result = await checkGrammarWithAI(normalizedText);
 
         const panelConnected = hasSidePanelConnection(tabId);
 
@@ -256,7 +263,7 @@ async function handleGrammarCheck(message, tabId) {
             // Store in history
             const historyEntry = {
                 timestamp: Date.now(),
-                originalText: text,
+                originalText: normalizedText,
                 suggestion: result.suggestion,
                 correctedText: result.correctedText,
                 issues: result.issues,
@@ -301,7 +308,7 @@ async function handleGrammarCheck(message, tabId) {
 
             const historyEntry = {
                 timestamp: Date.now(),
-                originalText: text,
+                originalText: normalizedText,
                 suggestion: 'Your text looks good! No grammar issues found.',
                 correctedText: result.correctedText || text,
                 issues: result.issues,

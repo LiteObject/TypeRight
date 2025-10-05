@@ -54,7 +54,7 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
    ```
 
 2. **Open Chrome Extensions page**
-      typingDelay: 2000, // Time in milliseconds (2000 = 2 seconds)
+   - Navigate to `chrome://extensions/`
    - Or click the menu icon (⋮) → More tools → Extensions
 
 3. **Enable Developer Mode**
@@ -78,17 +78,17 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
 
 2. **Navigate to any webpage** with text input fields (e.g., Gmail, Twitter, Google Docs)
 
-3. **Start typing** in any text field
+3. **Open the TypeRight side panel** (click the TypeRight toolbar icon or use Chrome's side panel menu). Checks only run while the panel is open.
 
-4. **Wait 1.5 seconds** after you stop typing - TypeRight will automatically check your text
+4. **Click into a text field** (input, textarea, or contenteditable) that contains at least **25 characters**. You can type or paste to reach the threshold.
 
-5. **Review suggestions** in the side panel that opens automatically
+5. **Pause briefly**—TypeRight will send the text to Ollama about 2 seconds after the last keystroke or immediately after the click if the text is already long enough. You'll see "Checking with Ollama…" in the side panel while it runs.
 
-6. **Copy or dismiss** suggestions:
+6. **Review suggestions** in the side panel.
+
+7. **Copy or dismiss** suggestions:
    - Use the copy icons next to "Revised" or "Alternative" to copy the text
    - Click "Dismiss" to remove the suggestion card from the list
-
-   4. Confirm the TypeRight side panel is open; checks won't run while it's closed
 ## Configuration
 
 ### Change AI Model
@@ -117,8 +117,8 @@ Edit `content.js` and modify the `CONFIG.typingDelay` value:
 
 ```javascript
 const CONFIG = {
-  typingDelay: 1500, // Time in milliseconds (1500 = 1.5 seconds)
-  minTextLength: 10,
+   typingDelay: 2000, // Time in milliseconds (2000 = 2 seconds)
+   minTextLength: 25,
   debounceDelay: 300,
 };
 ```
@@ -129,8 +129,8 @@ Edit `content.js` and modify the `CONFIG.minTextLength` value:
 
 ```javascript
 const CONFIG = {
-  typingDelay: 1500,
-  minTextLength: 10, // Minimum characters before checking
+   typingDelay: 2000,
+   minTextLength: 25, // Minimum characters before checking
   debounceDelay: 300,
 };
 ```
@@ -165,7 +165,7 @@ TypeRight works on virtually any website with text input fields, including:
 │  - Detects      │
 │  - Debounces    │
 └────────┬────────┘
-         │ After 1.5s
+         │ After click + ~2s delay
          ▼
 ┌─────────────────┐
 │ background.js   │
@@ -216,14 +216,16 @@ TypeRight works on virtually any website with text input fields, including:
 ### Grammar checks not triggering
 
 1. Make sure you're typing in a supported element (input, textarea, contenteditable)
-2. Wait at least 1.5 seconds after stopping typing
-3. Ensure text is at least 10 characters long
+2. Keep the TypeRight side panel open; checks pause when it closes
+3. Wait about 2 seconds after stopping typing (or a short moment after clicking a filled field)
+4. Ensure the text is at least 25 characters long
 
 ### Suggestions not appearing
 
 1. Check if the side panel opens automatically
 2. Try clicking the TypeRight icon in the toolbar to manually open the side panel
-3. Check the extension console for errors
+3. Click inside the text field so TypeRight can capture focus
+4. Check the extension console for errors
 
 ### Ollama connection issues
 

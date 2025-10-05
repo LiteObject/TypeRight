@@ -5,9 +5,10 @@
 
 // Configuration
 const CONFIG = {
-    typingDelay: 2000, // Wait 1.5 seconds after typing stops
-    minTextLength: 10, // Minimum text length to check
+    typingDelay: 2000, // Wait 2 seconds after typing stops
+    minTextLength: 25, // Minimum text length to check
     debounceDelay: 300, // Debounce for rapid input events
+    clickCheckDelay: 250, // Delay after click before checking (ms)
 };
 
 // State managemen
@@ -39,6 +40,7 @@ function initialize() {
 
     // Listen for focus to track active element
     document.addEventListener('focus', handleFocus, true);
+    document.addEventListener('click', handleClick, true);
 
     // Listen for messages from background script
     chrome.runtime.onMessage.addListener(handleMessage);
@@ -62,18 +64,7 @@ function handleInput(event) {
     // Update active element
     state.activeElement = element;
 
-    // Clear existing timer for this element
-    const elementId = getElementId(element);
-    if (state.typingTimers.has(elementId)) {
-        clearTimeout(state.typingTimers.get(elementId));
-    }
-
-    // Set new timer to check grammar after user stops typing
-    const timer = setTimeout(() => {
-        checkGrammar(element);
-    }, CONFIG.typingDelay);
-
-    state.typingTimers.set(elementId, timer);
+    scheduleGrammarCheck(element, { immediate: false });
 }
 
 /**
@@ -84,7 +75,19 @@ function handleFocus(event) {
 
     if (isEditableElement(element)) {
         state.activeElement = element;
+        scheduleGrammarCheck(element, { immediate: true, reason: 'focus' });
     }
+}
+
+function handleClick(event) {
+    const element = getEditableTarget(event.target);
+
+    if (!element) {
+        return;
+    }
+
+    state.activeElement = element;
+    scheduleGrammarCheck(element, { immediate: true, reason: 'click' });
 }
 
 /**
@@ -92,6 +95,26 @@ function handleFocus(event) {
  */
 function isEditableElement(element) {
     return element.matches(EDITABLE_SELECTORS);
+}
+
+function getEditableTarget(node) {
+    if (!node) {
+        return null;
+    }
+
+    if (node.nodeType === Node.TEXT_NODE && node.parentElement) {
+        node = node.parentElement;
+    }
+
+    if (typeof node.matches === 'function' && node.matches(EDITABLE_SELECTORS)) {
+        return node;
+    }
+
+    if (typeof node.closest === 'function') {
+        return node.closest(EDITABLE_SELECTORS);
+    }
+
+    return null;
 }
 
 /**
@@ -123,12 +146,18 @@ function getTextContent(element) {
  * Check grammar for the given element
  */
 async function checkGrammar(element) {
+    const elementId = getElementId(element);
+
+    if (state.typingTimers.has(elementId)) {
+        clearTimeout(state.typingTimers.get(elementId));
+        state.typingTimers.delete(elementId);
+    }
+
     if (!state.sidePanelOpen) {
         return;
     }
 
     const text = getTextContent(element).trim();
-    const elementId = getElementId(element);
 
     // Skip if text is too short
     if (text.length < CONFIG.minTextLength) {
@@ -213,6 +242,48 @@ function handleMessage(message, sender, sendResponse) {
     }
 
     return false;
+}
+
+function scheduleGrammarCheck(element, { immediate } = { immediate: false }) {
+    if (!state.sidePanelOpen || !isEditableElement(element)) {
+        return;
+    }
+
+    const elementId = getElementId(element);
+    const text = getTextContent(element).trim();
+
+    // Skip if text is too short
+    if (text.length < CONFIG.minTextLength) {
+        if (state.typingTimers.has(elementId)) {
+            clearTimeout(state.typingTimers.get(elementId));
+            state.typingTimers.delete(elementId);
+        }
+        return;
+    }
+
+    // Skip if text hasn't changed since last successful check
+    const lastText = state.lastCheckedText.get(elementId);
+    if (lastText === text) {
+        return;
+    }
+
+    if (state.typingTimers.has(elementId)) {
+        clearTimeout(state.typingTimers.get(elementId));
+    }
+
+    if (immediate) {
+        const timer = setTimeout(() => {
+            checkGrammar(element);
+        }, CONFIG.clickCheckDelay);
+        state.typingTimers.set(elementId, timer);
+        return;
+    }
+
+    const timer = setTimeout(() => {
+        checkGrammar(element);
+    }, CONFIG.typingDelay);
+
+    state.typingTimers.set(elementId, timer);
 }
 
 /**
