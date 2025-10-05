@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TypeRight - Grammar Suggestions</title>
+    <style>
+        :root {
+            --color-primary: #007bff;
+            --color-success: #28a745;
+            --color-warning: #ffc107;
+            --color-danger: #dc3545;
+            --color-background: #f8f9fa;
+            --color-surface: #ffffff;
+            --color-text: #212529;
+            --color-text-secondary: #6c757d;
+            --color-border: #dee2e6;
+            --spacing-xs: 4px;
+            --spacing-sm: 8px;
+            --spacing-md: 16px;
+            --spacing-lg: 24px;
+            --border-radius: 8px;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.1);
+            --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: var(--color-background);
+            color: var(--color-text);
+            line-height: 1.6;
+            padding: var(--spacing-md);
+            min-height: 100vh;
+        }
+
+        header {
+            background: var(--color-surface);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: var(--spacing-lg);
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--color-primary);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+        }
+
+        .logo {
+            font-size: 28px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--color-text-secondary);
+            margin-top: var(--spacing-xs);
+        }
+
+        #status {
+            background: var(--color-surface);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: var(--spacing-lg);
+            font-size: 14px;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-right: var(--spacing-sm);
+        }
+
+        .status-ready {
+            background-color: var(--color-success);
+            animation: pulse 2s infinite;
+        }
+
+        .status-working {
+            background-color: var(--color-warning);
+            animation: pulse 1s infinite;
+        }
+
+        .status-error {
+            background-color: var(--color-danger);
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        #suggestions {
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-md);
+        }
+
+        .suggestion-card {
+            background: var(--color-surface);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-md);
+            padding: var(--spacing-md);
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .suggestion-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--spacing-sm);
+            padding-bottom: var(--spacing-sm);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .suggestion-title {
+            font-weight: 600;
+            color: var(--color-text);
+            font-size: 14px;
+        }
+
+        .suggestion-time {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+        }
+
+        .text-section {
+            margin: var(--spacing-md) 0;
+        }
+
+        .text-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: var(--spacing-xs);
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-xs);
+        }
+
+        .label-original {
+            color: var(--color-danger);
+        }
+
+        .label-corrected {
+            color: var(--color-success);
+        }
+
+        .text-content {
+            background: var(--color-background);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+        }
+
+        .explanation {
+            background: #d1ecf1;
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            font-size: 13px;
+            color: #0c5460;
+            margin: var(--spacing-md) 0;
+        }
+
+        .actions {
+            display: flex;
+            gap: var(--spacing-sm);
+            margin-top: var(--spacing-md);
+        }
+
+        button {
+            flex: 1;
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-dismiss {
+            background: var(--color-text-secondary);
+            color: white;
+        }
+
+        .btn-dismiss:hover {
+            background: #5a6268;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: var(--spacing-lg);
+            color: var(--color-text-secondary);
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .empty-state-text {
+            font-size: 16px;
+            margin-bottom: var(--spacing-sm);
+        }
+
+        .empty-state-hint {
+            font-size: 14px;
+        }
+
+        .error-card {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: var(--border-radius);
+            padding: var(--spacing-md);
+            color: #721c24;
+            margin-bottom: var(--spacing-md);
+        }
+
+        .error-title {
+            font-weight: 600;
+            margin-bottom: var(--spacing-xs);
+        }
+
+        .loading {
+            text-align: center;
+            padding: var(--spacing-lg);
+            color: var(--color-text-secondary);
+        }
+
+        .spinner {
+            border: 3px solid var(--color-border);
+            border-top: 3px solid var(--color-primary);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto var(--spacing-md);
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <!-- <h1>
+            <span class="logo">✍️</span>
+            TypeRight
+        </h1> -->
+        <p class="subtitle">AI-powered grammar checker</p>
+    </header>
+
+    <div id="status">
+        <span class="status-indicator status-ready"></span>
+        Ready to check your writing
+    </div>
+
+    <div id="suggestions">
+        <div class="empty-state">
+            <div class="empty-state-icon">📝</div>
+            <p class="empty-state-text">No suggestions yet</p>
+            <p class="empty-state-hint">Start typing in any text field, and TypeRight will check your grammar
+                automatically!</p>
+        </div>
+    </div>
+
+    <script src="sidepanel.js"></script>
+</body>
+
+</html>

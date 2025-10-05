@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TypeRight Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+
+        h1 {
+            color: #007bff;
+        }
+
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #333;
+        }
+
+        input,
+        textarea {
+            width: 100%;
+            padding: 12px;
+            font-size: 14px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+
+        input:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .instructions {
+            background: #e7f3ff;
+            padding: 15px;
+            border-left: 4px solid #007bff;
+            margin-bottom: 20px;
+        }
+
+        .instructions h3 {
+            margin-top: 0;
+            color: #0056b3;
+        }
+
+        .instructions ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin: 8px 0;
+        }
+
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>TypeRight Test Page</h1>
+
+    <div class="instructions">
+        <h3>Testing Instructions:</h3>
+        <ul>
+            <li>Type some text with grammar errors in the fields below</li>
+            <li>Wait 1.5 seconds after you stop typing</li>
+            <li>The side panel should open automatically with suggestions</li>
+            <li>Open Chrome DevTools (F12) and check the Console tab for TypeRight messages</li>
+        </ul>
+    </div>
+
+    <div class="test-section">
+        <label>Test Text Input:</label>
+        <input type="text" placeholder="Example: I has a problem with grammer">
+    </div>
+
+    <div class="test-section">
+        <label>Test Textarea:</label>
+        <textarea placeholder="Example: She dont know how to fixed this. Its very confusing for me and her."></textarea>
+    </div>
+
+    <div class="test-section">
+        <label>Test Email Input:</label>
+        <input type="email" placeholder="Type a sentence here (not an email)">
+    </div>
+
+    <div class="test-section">
+        <label>Test Contenteditable:</label>
+        <div contenteditable="true"
+            style="border: 2px solid #ddd; padding: 12px; min-height: 100px; border-radius: 4px; background: #fafafa;">
+            Click here and type some text with errors...
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h3>Debugging Checklist:</h3>
+        <ol>
+            <li>Is Ollama running? Run: <code>ollama serve</code></li>
+            <li>Open Chrome DevTools (F12) → Console tab</li>
+            <li>Look for "TypeRight: Content script initialized" message</li>
+            <li>Type in a field and look for "TypeRight: Checking grammar" messages</li>
+            <li>Check for any error messages in red</li>
+            <li>Go to <code>chrome://extensions/</code> → TypeRight → "Inspect views: service worker"</li>
+            <li>Check background script console for errors</li>
+        </ol>
+    </div>
+
+    <script>
+        // Add visual feedback when TypeRight detects input
+        console.log('Test page loaded. TypeRight should initialize shortly.');
+
+        // Monitor for TypeRight activity
+        let inputCount = 0;
+        document.addEventListener('input', (e) => {
+            inputCount++;
+            console.log(`Input event #${inputCount} detected on`, e.target.tagName);
+        });
+    </script>
+</body>
+
+</html>
