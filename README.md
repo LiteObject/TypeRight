@@ -9,6 +9,7 @@
 - **Natural Suggestions** - Offers more natural and clear alternatives
 - **Multiple Input Support** - Works with text inputs, textareas, and contenteditable elements
 - **Beautiful UI** - Clean side panel interface for viewing suggestions
+- **Model Picker** - Choose any installed Ollama model directly in the side panel
 - **Privacy-Focused** - All processing happens locally on your machine
 
 ## Prerequisites
@@ -80,6 +81,9 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
 
 3. **Open the TypeRight side panel** (click the TypeRight toolbar icon or use Chrome's side panel menu). Checks only run while the panel is open.
 
+   - Use the **Model** dropdown at the top of the panel to pick from your installed Ollama models.
+   - Click **Refresh** if you just pulled a new model and want it to appear.
+
 4. **Click into a text field** (input, textarea, or contenteditable) that contains at least **25 characters**. You can type or paste to reach the threshold.
 
 5. **Pause briefly**—TypeRight will send the text to Ollama about 2 seconds after the last keystroke or immediately after the click if the text is already long enough. You'll see "Checking with Ollama…" in the side panel while it runs.
@@ -93,23 +97,18 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
 
 ### Change AI Model
 
-Edit `background.js` and modify the `CONFIG.model` value:
+- Open the side panel and use the **Model** dropdown to select any installed Ollama model. The choice is saved automatically.
+- Click **Refresh** to rescan for models after running commands such as `ollama pull llama3.2`.
+- TypeRight falls back to the model defined in `background.js` if no selection is stored. You can change that default by editing `CONFIG.model`.
 
 ```javascript
 const CONFIG = {
-  aiServiceUrl: 'http://localhost:11434/api/chat',
-  model: 'llama3.2', // Change this to your preferred model
-  maxRetries: 2,
-  requestTimeout: 30000,
+   aiServiceUrl: 'http://localhost:11434/api/chat',
+   model: 'llama3.2:latest',
+   maxRetries: 2,
+   requestTimeout: 30000,
 };
 ```
-
-Available models (after pulling with Ollama):
-- `llama3.2` (recommended, latest)
-- `llama3.1`
-- `mistral`
-- `phi3`
-- Other models from [Ollama Library](https://ollama.ai/library)
 
 ### Adjust Typing Delay
 

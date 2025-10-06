@@ -17,7 +17,16 @@ const state = {
     pendingChecks: new Map(),
     checkHistory: [],
     sidePanelPorts: new Map(), // Store connections to side panels
+    availableModels: [],
+    selectedModel: null,
+    modelFetchInProgress: null,
 };
+
+const STORAGE_KEYS = {
+    selectedModel: 'typeright.selectedModel',
+};
+
+initializeModelSelection();
 
 function hasSidePanelConnection(tabId) {
     if (tabId == null) {
@@ -177,6 +186,18 @@ chrome.runtime.onConnect.addListener((port) => {
                         console.error('TypeRight: Failed to highlight element:', err);
                     }
                     break;
+
+                case 'requestModels':
+                    await handleModelListRequest(port, { forceRefresh: false });
+                    break;
+
+                case 'refreshModels':
+                    await handleModelListRequest(port, { forceRefresh: true });
+                    break;
+
+                case 'setModel':
+                    await handleModelSelectionRequest(port, message.model);
+                    break;
             }
         });
 
@@ -185,6 +206,13 @@ chrome.runtime.onConnect.addListener((port) => {
             action: 'historyUpdate',
             history: state.checkHistory,
         });
+
+        if (state.selectedModel) {
+            port.postMessage({
+                action: 'modelSelected',
+                model: state.selectedModel,
+            });
+        }
     }
 });
 
@@ -255,7 +283,8 @@ async function handleGrammarCheck(message, tabId) {
         }
 
         // Call AI service to check grammar
-        const result = await checkGrammarWithAI(normalizedText);
+        const modelToUse = state.selectedModel || CONFIG.model;
+        const result = await checkGrammarWithAI(normalizedText, modelToUse);
 
         const panelConnected = hasSidePanelConnection(tabId);
 
@@ -349,7 +378,7 @@ async function handleGrammarCheck(message, tabId) {
 /**
  * Check grammar using AI service
  */
-async function checkGrammarWithAI(text) {
+async function checkGrammarWithAI(text, modelName) {
     const systemPrompt = `You're a communication expert. You're tasked with helping the user with communication skills. Your goal is to take the user input and provide feedback on grammatical mistakes and summarize the meaning.`;
 
     const userPrompt = `User Input:
@@ -374,7 +403,7 @@ Focus on clarity and correctness in the revised version.`;
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: CONFIG.model,
+                model: modelName,
                 messages: [
                     {
                         role: 'system',
@@ -534,3 +563,149 @@ chrome.action.onClicked.addListener(async (tab) => {
 });
 
 console.log('TypeRight: Background service worker initialized');
+
+async function initializeModelSelection() {
+    try {
+        const stored = await storageGet(STORAGE_KEYS.selectedModel);
+        const storedModel = stored?.[STORAGE_KEYS.selectedModel];
+        if (typeof storedModel === 'string' && storedModel.trim()) {
+            applySelectedModel(storedModel.trim(), { persist: false, broadcast: false });
+        } else {
+            state.selectedModel = CONFIG.model;
+        }
+    } catch (error) {
+        console.warn('TypeRight: Failed to load stored model preference:', error);
+        state.selectedModel = CONFIG.model;
+    }
+}
+
+async function handleModelListRequest(port, { forceRefresh }) {
+    try {
+        port.postMessage({ action: 'modelList', loading: true, selectedModel: state.selectedModel || CONFIG.model });
+        const models = await getAvailableModels({ forceRefresh });
+        port.postMessage({
+            action: 'modelList',
+            models,
+            selectedModel: state.selectedModel || CONFIG.model,
+        });
+    } catch (error) {
+        const friendlyMessage = (error?.message || '').includes('Failed to fetch')
+            ? 'Cannot connect to Ollama. Make sure `ollama serve` is running.'
+            : error?.message || 'Failed to load Ollama models';
+        port.postMessage({
+            action: 'modelList',
+            models: [],
+            selectedModel: state.selectedModel || CONFIG.model,
+            error: friendlyMessage,
+        });
+    }
+}
+
+async function handleModelSelectionRequest(port, modelName) {
+    const normalized = typeof modelName === 'string' ? modelName.trim() : '';
+    if (!normalized) {
+        port.postMessage({
+            action: 'modelSelectionError',
+            error: 'Please choose a valid model name.',
+        });
+        return;
+    }
+
+    try {
+        await applySelectedModel(normalized, { persist: true, broadcast: true });
+        port.postMessage({
+            action: 'modelSelected',
+            model: state.selectedModel,
+            acknowledgement: true,
+        });
+    } catch (error) {
+        console.error('TypeRight: Failed to apply selected model:', error);
+        port.postMessage({
+            action: 'modelSelectionError',
+            error: 'Failed to save selected model. Please try again.',
+        });
+    }
+}
+
+async function applySelectedModel(modelName, { persist, broadcast }) {
+    state.selectedModel = modelName;
+    CONFIG.model = modelName;
+
+    if (persist) {
+        try {
+            await storageSet(STORAGE_KEYS.selectedModel, modelName);
+        } catch (error) {
+            console.warn('TypeRight: Failed to persist selected model:', error);
+        }
+    }
+
+    if (broadcast) {
+        broadcastToSidePanels(null, {
+            action: 'modelSelected',
+            model: state.selectedModel,
+        });
+    }
+}
+
+async function getAvailableModels({ forceRefresh }) {
+    if (!forceRefresh && state.availableModels.length > 0) {
+        return state.availableModels;
+    }
+
+    if (state.modelFetchInProgress) {
+        return state.modelFetchInProgress;
+    }
+
+    state.modelFetchInProgress = fetchAvailableModels()
+        .then((models) => {
+            state.availableModels = models;
+            return models;
+        })
+        .finally(() => {
+            state.modelFetchInProgress = null;
+        });
+
+    return state.modelFetchInProgress;
+}
+
+async function fetchAvailableModels() {
+    const response = await fetch('http://localhost:11434/api/tags');
+    if (!response.ok) {
+        throw new Error(`Ollama responded with status ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || !Array.isArray(data.models)) {
+        throw new Error('Unexpected response format from Ollama');
+    }
+
+    return data.models.map((model) => ({
+        name: model.name,
+        size: model.size,
+        modifiedAt: model.modified_at,
+    }));
+}
+
+function storageGet(key) {
+    return new Promise((resolve, reject) => {
+        chrome.storage.local.get([key], (result) => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+            }
+            resolve(result);
+        });
+    });
+}
+
+function storageSet(key, value) {
+    return new Promise((resolve, reject) => {
+        chrome.storage.local.set({ [key]: value }, () => {
+            if (chrome.runtime.lastError) {
+                reject(new Error(chrome.runtime.lastError.message));
+                return;
+            }
+            resolve();
+        });
+    });
+}

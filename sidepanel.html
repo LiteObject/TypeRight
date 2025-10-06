@@ -86,6 +86,103 @@
             font-size: 14px;
         }
 
+        .model-controls {
+            background: var(--color-surface);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: var(--spacing-lg);
+            display: flex;
+            flex-direction: column;
+            gap: var(--spacing-sm);
+        }
+
+        .model-controls-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--spacing-md);
+        }
+
+        .model-controls label {
+            font-size: 13px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--color-text-secondary);
+        }
+
+        .model-controls-actions {
+            display: flex;
+            align-items: center;
+            gap: var(--spacing-sm);
+            flex: 1;
+        }
+
+        .model-select {
+            flex: 1;
+            padding: var(--spacing-sm);
+            border-radius: var(--border-radius);
+            border: 1px solid var(--color-border);
+            background: var(--color-background);
+            font-size: 14px;
+            color: var(--color-text);
+            min-width: 0;
+        }
+
+        .model-select:disabled {
+            background: var(--color-background);
+            color: var(--color-text-secondary);
+            cursor: not-allowed;
+        }
+
+        button {
+            padding: var(--spacing-sm) var(--spacing-md);
+            border: none;
+            border-radius: var(--border-radius);
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-sm);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .btn-refresh {
+            background: var(--color-background);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            flex: none;
+        }
+
+        .btn-refresh:hover {
+            background: #e9ecef;
+        }
+
+        .btn-refresh:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .model-status {
+            font-size: 12px;
+            color: var(--color-text-secondary);
+            min-height: 18px;
+        }
+
+        .model-status.is-error {
+            color: var(--color-danger);
+        }
+
         .status-indicator {
             display: inline-block;
             width: 8px;
@@ -214,24 +311,8 @@
             margin-top: var(--spacing-md);
         }
 
-        button {
+        .actions button {
             flex: 1;
-            padding: var(--spacing-sm) var(--spacing-md);
-            border: none;
-            border-radius: var(--border-radius);
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        button:hover {
-            transform: translateY(-1px);
-            box-shadow: var(--shadow-sm);
-        }
-
-        button:active {
-            transform: translateY(0);
         }
 
         .btn-dismiss {
@@ -341,6 +422,19 @@
     <!-- <header>
         <p class="subtitle">AI-powered grammar checker</p>
     </header> -->
+
+    <div class="model-controls">
+        <div class="model-controls-row">
+            <label for="model-select">Model</label>
+            <div class="model-controls-actions">
+                <select id="model-select" class="model-select">
+                    <option value="">Loading…</option>
+                </select>
+                <button id="refresh-models" type="button" class="btn-refresh">Refresh</button>
+            </div>
+        </div>
+        <div id="model-status" class="model-status">Loading models…</div>
+    </div>
 
     <div id="status">
         <span class="status-indicator status-ready"></span>

@@ -9,12 +9,28 @@ const state = {
     currentSuggestion: null,
     currentTabId: null,
     tabListenersRegistered: false,
+    availableModels: [],
+    selectedModel: null,
+    modelsLoading: false,
+};
+
+let modelSelectEl = null;
+let refreshModelsButton = null;
+let modelStatusEl = null;
+
+const MODEL_STATUS_MESSAGES = {
+    loading: 'Loading models…',
+    refreshing: 'Refreshing model list…',
+    switching: (model) => `Switching to ${model}…`,
+    success: (model) => `Using model: ${model}`,
+    empty: 'No models detected. Use "ollama pull <model>" then click Refresh.',
 };
 
 function initialize() {
     console.log('TypeRight Side Panel: Initialized');
     connectToBackground();
     addStyles();
+    setupModelControls();
     renderSuggestions(state.suggestions);
 }
 
@@ -22,6 +38,10 @@ function connectToBackground() {
     try {
         const port = chrome.runtime.connect({ name: 'sidepanel' });
         state.port = port;
+
+        if (modelSelectEl) {
+            requestModelList({ forceRefresh: false });
+        }
 
         port.onMessage.addListener(handlePortMessage);
 
@@ -82,6 +102,18 @@ function handlePortMessage(message) {
                 updateStatus(statusMessage, statusType);
             }
             break;
+
+        case 'modelList':
+            handleModelListResponse(message);
+            break;
+
+        case 'modelSelected':
+            handleModelSelected(message.model);
+            break;
+
+        case 'modelSelectionError':
+            handleModelSelectionError(message.error);
+            break;
     }
 }
 
@@ -98,6 +130,39 @@ function handleTabUpdated(tabId, changeInfo, tab) {
         state.currentTabId = tabId;
         syncActiveTab();
     }
+}
+
+function setupModelControls() {
+    modelSelectEl = document.getElementById('model-select');
+    refreshModelsButton = document.getElementById('refresh-models');
+    modelStatusEl = document.getElementById('model-status');
+
+    if (!modelSelectEl || !refreshModelsButton || !modelStatusEl) {
+        console.warn('TypeRight Side Panel: Model controls missing from DOM');
+        return;
+    }
+
+    refreshModelsButton.addEventListener('click', () => {
+        requestModelList({ forceRefresh: true });
+    });
+
+    modelSelectEl.addEventListener('change', (event) => {
+        const newModel = event.target.value;
+
+        if (!newModel) {
+            updateModelStatus('Select a model to continue.');
+            return;
+        }
+
+        if (newModel === state.selectedModel) {
+            updateModelStatus(MODEL_STATUS_MESSAGES.success(newModel));
+            return;
+        }
+
+        requestModelSelection(newModel);
+    });
+
+    requestModelList({ forceRefresh: false });
 }
 
 function syncActiveTab(requestHistory = false) {
@@ -409,6 +474,192 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text ?? '';
     return div.innerHTML;
+}
+
+function requestModelList({ forceRefresh }) {
+    if (!state.port) {
+        console.warn('TypeRight Side Panel: No active port when requesting model list');
+        updateModelStatus('Not connected. Reopen the side panel to load models.', true);
+        setModelControlsLoading(false, null);
+        return;
+    }
+
+    const loadingMessage = forceRefresh ? MODEL_STATUS_MESSAGES.refreshing : MODEL_STATUS_MESSAGES.loading;
+    setModelControlsLoading(true, loadingMessage);
+
+    state.port.postMessage({ action: forceRefresh ? 'refreshModels' : 'requestModels' });
+}
+
+function requestModelSelection(model) {
+    if (!state.port) {
+        console.warn('TypeRight Side Panel: Unable to set model without active port');
+        updateModelStatus('Unable to switch models right now. Reopen the side panel and try again.', true);
+        setModelControlsLoading(false, null);
+        if (modelSelectEl && state.selectedModel) {
+            modelSelectEl.value = state.selectedModel;
+        }
+        return;
+    }
+
+    setModelControlsLoading(true, MODEL_STATUS_MESSAGES.switching(model));
+    state.port.postMessage({ action: 'setModel', model });
+}
+
+function handleModelListResponse(message) {
+    if (!modelSelectEl || !modelStatusEl) {
+        return;
+    }
+
+    if (message.loading) {
+        setModelControlsLoading(true, MODEL_STATUS_MESSAGES.loading);
+        return;
+    }
+
+    const models = Array.isArray(message.models) ? message.models : [];
+    state.availableModels = models;
+
+    setModelControlsLoading(false, null);
+
+    if (message.error) {
+        updateModelStatus(`Error loading models: ${message.error}`, true);
+        return;
+    }
+
+    const selectedModel = message.selectedModel || state.selectedModel;
+    populateModelSelect(models, selectedModel);
+
+    if (models.length === 0) {
+        updateModelStatus(MODEL_STATUS_MESSAGES.empty, true);
+    } else {
+        const effectiveModel = state.selectedModel || models[0]?.name;
+        updateModelStatus(MODEL_STATUS_MESSAGES.success(effectiveModel));
+    }
+}
+
+function handleModelSelected(model) {
+    if (!modelSelectEl) {
+        return;
+    }
+
+    if (!model || typeof model !== 'string') {
+        updateModelStatus('No model selected.', true);
+        return;
+    }
+
+    state.selectedModel = model;
+
+    const optionExists = Array.from(modelSelectEl.options).some((option) => option.value === model);
+    if (!optionExists) {
+        const option = document.createElement('option');
+        option.value = model;
+        option.textContent = model;
+        modelSelectEl.appendChild(option);
+    }
+
+    modelSelectEl.value = model;
+    setModelControlsLoading(false, null);
+    updateModelStatus(MODEL_STATUS_MESSAGES.success(model));
+}
+
+function handleModelSelectionError(errorMessage) {
+    setModelControlsLoading(false, null);
+    updateModelStatus(errorMessage || 'Failed to update model. Please try again.', true);
+
+    if (modelSelectEl && state.selectedModel) {
+        modelSelectEl.value = state.selectedModel;
+    }
+}
+
+function populateModelSelect(models, selectedModel) {
+    if (!modelSelectEl) {
+        return;
+    }
+
+    modelSelectEl.innerHTML = '';
+
+    if (!models || models.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'No models found';
+        option.disabled = true;
+        option.selected = true;
+        modelSelectEl.appendChild(option);
+        modelSelectEl.disabled = true;
+        state.selectedModel = null;
+        return;
+    }
+
+    modelSelectEl.disabled = state.modelsLoading;
+
+    models.forEach((model) => {
+        const option = document.createElement('option');
+        option.value = model.name;
+        option.textContent = formatModelLabel(model);
+        modelSelectEl.appendChild(option);
+    });
+
+    const fallbackModel = selectedModel && models.some((model) => model.name === selectedModel)
+        ? selectedModel
+        : models[0].name;
+
+    modelSelectEl.value = fallbackModel;
+    state.selectedModel = fallbackModel;
+}
+
+function formatModelLabel(model) {
+    if (!model || !model.name) {
+        return 'Unknown model';
+    }
+
+    const parts = [model.name];
+
+    if (typeof model.size === 'number' && !Number.isNaN(model.size)) {
+        parts.push(`(${formatBytes(model.size)})`);
+    }
+
+    return parts.join(' ');
+}
+
+function formatBytes(bytes) {
+    if (typeof bytes !== 'number' || Number.isNaN(bytes)) {
+        return 'unknown';
+    }
+
+    if (bytes === 0) {
+        return '0 B';
+    }
+
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+    const value = bytes / Math.pow(1024, index);
+
+    return `${value >= 10 ? value.toFixed(0) : value.toFixed(1)} ${units[index]}`;
+}
+
+function setModelControlsLoading(isLoading, statusMessage) {
+    state.modelsLoading = Boolean(isLoading);
+
+    if (modelSelectEl) {
+        const shouldDisableSelect = isLoading || state.availableModels.length === 0;
+        modelSelectEl.disabled = shouldDisableSelect;
+    }
+
+    if (refreshModelsButton) {
+        refreshModelsButton.disabled = Boolean(isLoading);
+    }
+
+    if (statusMessage) {
+        updateModelStatus(statusMessage, false);
+    }
+}
+
+function updateModelStatus(message, isError = false) {
+    if (!modelStatusEl) {
+        return;
+    }
+
+    modelStatusEl.textContent = message || '';
+    modelStatusEl.classList.toggle('is-error', Boolean(isError));
 }
 
 function addStyles() {
