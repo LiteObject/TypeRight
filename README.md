@@ -86,6 +86,9 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
 
 4. **Click into a text field** (input, textarea, or contenteditable) that contains at least **25 characters**. You can type or paste to reach the threshold.
 
+   - The field must be part of the main page (embedded editors inside iframes are not yet supported).
+   - Make sure the cursor is inside the field—TypeRight only monitors the element you’ve interacted with most recently.
+
 5. **Pause briefly**—TypeRight will send the text to Ollama about 2 seconds after the last keystroke or immediately after the click if the text is already long enough. You'll see "Checking with Ollama…" in the side panel while it runs.
 
 6. **Review suggestions** in the side panel.
@@ -218,6 +221,7 @@ TypeRight works on virtually any website with text input fields, including:
 2. Keep the TypeRight side panel open; checks pause when it closes
 3. Wait about 2 seconds after stopping typing (or a short moment after clicking a filled field)
 4. Ensure the text is at least 25 characters long
+5. Confirm the field lives on the main page; embedded iframes or cross-origin editors aren’t monitored yet
 
 ### Suggestions not appearing
 
