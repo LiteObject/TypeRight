@@ -538,11 +538,14 @@ function displayError(errorMessage) {
 
     const errorCard = document.createElement('div');
     errorCard.className = 'error-card';
+    const recoveryHint = /timeout|took longer than/i.test(errorMessage)
+        ? 'The selected model may still be loading. Try again or choose a smaller model.'
+        : 'Make sure Ollama is running: ollama serve';
     errorCard.innerHTML = `
     <div class="error-title">⚠️ Error</div>
     <p>${escapeHtml(errorMessage)}</p>
     <p style="margin-top: 8px; font-size: 13px;">
-      Make sure Ollama is running: <code>ollama serve</code>
+            ${escapeHtml(recoveryHint)}
     </p>
   `;
 

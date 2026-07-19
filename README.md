@@ -114,7 +114,7 @@ const CONFIG = {
    aiServiceUrl: 'http://localhost:11434/api/chat',
    model: 'llama3.2:latest',
    maxRetries: 2,
-   requestTimeout: 30000,
+   requestTimeout: 120000,
 };
 ```
 

@@ -8,7 +8,7 @@ const CONFIG = {
     aiServiceUrl: 'http://localhost:11434/api/chat',
     model: 'llama3.2:latest', // Using llama3.2:latest for the newest version
     maxRetries: 2,
-    requestTimeout: 30000, // 30 seconds
+    requestTimeout: 120000, // 2 minutes for local model loading and generation
     minTextLength: 25,
 };
 
@@ -572,9 +572,10 @@ AI Response:
 
 Focus on clarity and correctness in the revised version.`;
 
+    let timeoutId = null;
     try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
+        timeoutId = setTimeout(() => controller.abort(), CONFIG.requestTimeout);
 
         const response = await fetch(CONFIG.aiServiceUrl, {
             method: 'POST',
@@ -599,8 +600,6 @@ Focus on clarity and correctness in the revised version.`;
             signal: controller.signal,
         });
 
-        clearTimeout(timeoutId);
-
         if (!response.ok) {
             throw new Error(`AI service returned status ${response.status}`);
         }
@@ -623,7 +622,7 @@ Focus on clarity and correctness in the revised version.`;
         return result;
     } catch (error) {
         if (error.name === 'AbortError') {
-            throw new Error('Request timeout - AI service took too long to respond');
+            throw new Error(`Request timeout - ${modelName} took longer than ${CONFIG.requestTimeout / 1000} seconds. Ollama may be loading the model; try again or choose a smaller model.`);
         }
 
         // Check if Ollama is running
@@ -632,6 +631,8 @@ Focus on clarity and correctness in the revised version.`;
         }
 
         throw error;
+    } finally {
+        clearTimeout(timeoutId);
     }
 }
 
