@@ -15,6 +15,10 @@ const CONFIG = {
 const state = {
     typingTimers: new Map(),
     lastCheckedText: new Map(),
+    lastObservedText: new Map(),
+    requestVersions: new Map(),
+    currentRequests: new Map(),
+    requestSequence: 0,
     activeElement: null,
     sidePanelOpen: false,
 };
@@ -158,6 +162,7 @@ async function checkGrammar(element) {
     }
 
     const text = getTextContent(element).trim();
+    const requestVersion = updateElementVersion(elementId, text);
 
     // Skip if text is too short
     if (text.length < CONFIG.minTextLength) {
@@ -171,6 +176,9 @@ async function checkGrammar(element) {
     }
 
     console.log('TypeRight: Checking grammar for text:', text.substring(0, 50) + '...');
+
+    const requestId = createRequestId();
+    state.currentRequests.set(elementId, { requestId, requestVersion });
 
     try {
         // Check if extension context is valid
@@ -189,11 +197,15 @@ async function checkGrammar(element) {
             action: 'checkGrammar',
             text: text,
             elementId: elementId,
+            requestId,
+            requestVersion,
         });
 
-        if (response && response.success) {
+        if (response && response.success && isCurrentRequest(elementId, requestId, requestVersion, text)) {
             state.lastCheckedText.set(elementId, text);
             console.log('TypeRight: Grammar check initiated');
+        } else if (response && response.success) {
+            console.log('TypeRight: Grammar check response is stale; ignoring it');
         } else if (response && response.panelOpen === false) {
             console.log('TypeRight: Side panel is closed; skipping grammar check for now');
         } else if (response && response.error) {
@@ -206,10 +218,16 @@ async function checkGrammar(element) {
             // Clear timers to prevent further attempts
             state.typingTimers.clear();
             state.lastCheckedText.clear();
+            state.lastObservedText.clear();
+            state.requestVersions.clear();
+            state.currentRequests.clear();
             return;
         }
 
         console.error('TypeRight: Error checking grammar (sendMessage failed):', error);
+        if (state.currentRequests.get(elementId)?.requestId === requestId) {
+            state.currentRequests.delete(elementId);
+        }
     }
 }
 
@@ -226,8 +244,31 @@ function handleMessage(message, sender, sendResponse) {
 
         switch (message.action) {
             case 'showSuggestion':
-                showSuggestion(message.elementId, message.suggestion, message.originalText);
-                break;
+                const accepted = showSuggestion(
+                    message.elementId,
+                    message.suggestion,
+                    message.originalText,
+                    message.requestId,
+                    message.requestVersion,
+                );
+
+                if (typeof sendResponse === 'function') {
+                    sendResponse({ accepted });
+                }
+                return true;
+
+            case 'isCurrentCheck':
+                if (typeof sendResponse === 'function') {
+                    sendResponse({
+                        current: isCurrentRequest(
+                            message.elementId,
+                            message.requestId,
+                            message.requestVersion,
+                            message.originalText,
+                        ),
+                    });
+                }
+                return true;
 
             case 'highlightElement':
                 highlightElement(message.elementId);
@@ -251,6 +292,7 @@ function scheduleGrammarCheck(element, { immediate } = { immediate: false }) {
 
     const elementId = getElementId(element);
     const text = getTextContent(element).trim();
+    updateElementVersion(elementId, text);
 
     // Skip if text is too short
     if (text.length < CONFIG.minTextLength) {
@@ -289,7 +331,12 @@ function scheduleGrammarCheck(element, { immediate } = { immediate: false }) {
 /**
  * Show suggestion (open side panel)
  */
-function showSuggestion(elementId, suggestion, originalText) {
+function showSuggestion(elementId, suggestion, originalText, requestId, requestVersion) {
+    if (!isCurrentRequest(elementId, requestId, requestVersion, originalText)) {
+        console.log('TypeRight: Ignoring stale suggestion for element:', elementId);
+        return false;
+    }
+
     console.log('TypeRight: Showing suggestion for element:', elementId);
 
     // Add visual indicator to the element
@@ -307,6 +354,38 @@ function showSuggestion(elementId, suggestion, originalText) {
             element.style.outlineOffset = '';
         }, 3000);
     }
+
+    return true;
+}
+
+function updateElementVersion(elementId, text) {
+    const lastObservedText = state.lastObservedText.get(elementId);
+
+    if (lastObservedText !== text) {
+        state.lastObservedText.set(elementId, text);
+        state.requestVersions.set(elementId, (state.requestVersions.get(elementId) || 0) + 1);
+        state.currentRequests.delete(elementId);
+    }
+
+    return state.requestVersions.get(elementId) || 0;
+}
+
+function createRequestId() {
+    state.requestSequence += 1;
+    return `${Date.now()}-${state.requestSequence}`;
+}
+
+function isCurrentRequest(elementId, requestId, requestVersion, originalText) {
+    const currentRequest = state.currentRequests.get(elementId);
+
+    if (!currentRequest
+        || currentRequest.requestId !== requestId
+        || currentRequest.requestVersion !== requestVersion) {
+        return false;
+    }
+
+    const element = findElementById(elementId);
+    return Boolean(element && getTextContent(element).trim() === (originalText || '').trim());
 }
 
 /**
@@ -332,6 +411,9 @@ function updateSidePanelStatus(isOpen) {
         state.typingTimers.forEach((timer) => clearTimeout(timer));
         state.typingTimers.clear();
         state.lastCheckedText.clear();
+        state.lastObservedText.clear();
+        state.requestVersions.clear();
+        state.currentRequests.clear();
     }
 }
 

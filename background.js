@@ -253,7 +253,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * Handle grammar check request
  */
 async function handleGrammarCheck(message, tabId) {
-    const { text, elementId } = message;
+    const { text, elementId, requestId, requestVersion } = message;
     const normalizedText = (text || '').trim();
 
     if (normalizedText.length < CONFIG.minTextLength) {
@@ -261,7 +261,15 @@ async function handleGrammarCheck(message, tabId) {
         return;
     }
 
+    if (!requestId || requestVersion == null) {
+        console.warn('TypeRight: Ignoring grammar check without a request ID and version');
+        return;
+    }
+
     console.log('TypeRight: Checking grammar for text length:', normalizedText.length);
+
+    const requestKey = `${tabId}:${elementId}`;
+    state.pendingChecks.set(requestKey, { requestId, requestVersion });
 
     try {
         const panelConnectedInitially = hasSidePanelConnection(tabId);
@@ -279,6 +287,13 @@ async function handleGrammarCheck(message, tabId) {
         // Call AI service to check grammar
         const modelToUse = state.selectedModel || CONFIG.model;
         const result = await checkGrammarWithAI(normalizedText, modelToUse);
+
+        if (!isLatestCheck(requestKey, requestId, requestVersion)
+            || !(await isCurrentCheck(tabId, elementId, requestId, requestVersion, normalizedText))
+            || !isLatestCheck(requestKey, requestId, requestVersion)) {
+            console.log('TypeRight: Discarding stale grammar result for element:', elementId);
+            return;
+        }
 
         const panelConnected = hasSidePanelConnection(tabId);
 
@@ -299,24 +314,33 @@ async function handleGrammarCheck(message, tabId) {
                 noIssues: false,
             };
 
-            state.checkHistory.unshift(historyEntry);
-
-            // Keep only last 50 checks
-            if (state.checkHistory.length > 50) {
-                state.checkHistory = state.checkHistory.slice(0, 50);
-            }
-
             // Notify content script
             try {
-                await chrome.tabs.sendMessage(tabId, {
+                const response = await chrome.tabs.sendMessage(tabId, {
                     action: 'showSuggestion',
                     elementId: elementId,
                     suggestion: result.suggestion,
-                    originalText: text,
+                    originalText: normalizedText,
+                    requestId,
+                    requestVersion,
                 });
+
+                if (!response || response.accepted !== true) {
+                    console.log('TypeRight: Content script rejected stale suggestion');
+                    return;
+                }
+
+                state.checkHistory.unshift(historyEntry);
+
+                // Keep only last 50 checks
+                if (state.checkHistory.length > 50) {
+                    state.checkHistory = state.checkHistory.slice(0, 50);
+                }
+
                 console.log('TypeRight: Sent suggestion to content script');
             } catch (error) {
                 console.error('TypeRight: Failed to send to content script:', error);
+                return;
             }
 
             if (panelConnected) {
@@ -344,6 +368,11 @@ async function handleGrammarCheck(message, tabId) {
                 noIssues: true,
             };
 
+            if (!(await isCurrentCheck(tabId, elementId, requestId, requestVersion, normalizedText))) {
+                console.log('TypeRight: Discarding stale no-issues result for element:', elementId);
+                return;
+            }
+
             state.checkHistory.unshift(historyEntry);
 
             if (state.checkHistory.length > 50) {
@@ -366,6 +395,34 @@ async function handleGrammarCheck(message, tabId) {
             action: 'displayError',
             error: error.message,
         });
+    } finally {
+        if (state.pendingChecks.get(requestKey)?.requestId === requestId) {
+            state.pendingChecks.delete(requestKey);
+        }
+    }
+}
+
+function isLatestCheck(requestKey, requestId, requestVersion) {
+    const currentCheck = state.pendingChecks.get(requestKey);
+    return Boolean(currentCheck
+        && currentCheck.requestId === requestId
+        && currentCheck.requestVersion === requestVersion);
+}
+
+async function isCurrentCheck(tabId, elementId, requestId, requestVersion, originalText) {
+    try {
+        const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'isCurrentCheck',
+            elementId,
+            requestId,
+            requestVersion,
+            originalText,
+        });
+
+        return response?.current === true;
+    } catch (error) {
+        console.warn('TypeRight: Failed to validate current field text:', error);
+        return false;
     }
 }
 
