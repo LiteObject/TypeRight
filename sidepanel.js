@@ -51,7 +51,7 @@ function connectToBackground() {
             setTimeout(connectToBackground, 1000);
         });
 
-        syncActiveTab(true);
+        syncActiveTab();
 
         if (!state.tabListenersRegistered) {
             chrome.tabs.onActivated.addListener(handleTabActivated);
@@ -81,12 +81,8 @@ function handlePortMessage(message) {
             break;
 
         case 'historyUpdate':
-            if (Array.isArray(message.history) && message.history.length > 0) {
+            if (Array.isArray(message.history)) {
                 renderSuggestions(message.history);
-            } else if (state.suggestions.length === 0) {
-                renderSuggestions([]);
-            } else {
-                console.log('TypeRight Side Panel: Ignoring empty history update to preserve existing suggestions');
             }
             break;
 
@@ -165,7 +161,7 @@ function setupModelControls() {
     requestModelList({ forceRefresh: false });
 }
 
-function syncActiveTab(requestHistory = false) {
+function syncActiveTab() {
     try {
         chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
             if (chrome.runtime.lastError) {
@@ -186,12 +182,10 @@ function syncActiveTab(requestHistory = false) {
                     tabId: state.currentTabId,
                 });
 
-                if (requestHistory || state.suggestions.length === 0) {
-                    state.port.postMessage({
-                        action: 'requestHistory',
-                        tabId: state.currentTabId,
-                    });
-                }
+                state.port.postMessage({
+                    action: 'requestHistory',
+                    tabId: state.currentTabId,
+                });
             }
         });
     } catch (error) {

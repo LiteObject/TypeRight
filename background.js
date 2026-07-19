@@ -201,12 +201,6 @@ chrome.runtime.onConnect.addListener((port) => {
             }
         });
 
-        // Send initial history when side panel connects
-        port.postMessage({
-            action: 'historyUpdate',
-            history: state.checkHistory,
-        });
-
         if (state.selectedModel) {
             port.postMessage({
                 action: 'modelSelected',
