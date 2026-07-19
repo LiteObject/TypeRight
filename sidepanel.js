@@ -12,8 +12,11 @@ const state = {
     availableModels: [],
     selectedModel: null,
     modelsLoading: false,
+    captureEnabled: false,
 };
 
+let captureToggleEl = null;
+let captureStatusEl = null;
 let modelSelectEl = null;
 let refreshModelsButton = null;
 let modelStatusEl = null;
@@ -30,6 +33,7 @@ function initialize() {
     console.log('TypeRight Side Panel: Initialized');
     connectToBackground();
     addStyles();
+    setupCaptureControls();
     setupModelControls();
     renderSuggestions(state.suggestions);
 }
@@ -110,6 +114,10 @@ function handlePortMessage(message) {
         case 'modelSelectionError':
             handleModelSelectionError(message.error);
             break;
+
+        case 'captureStatus':
+            handleCaptureStatus(message);
+            break;
     }
 }
 
@@ -118,13 +126,103 @@ function handleTabActivated(activeInfo) {
         return;
     }
     state.currentTabId = activeInfo.tabId;
+    updateCaptureStatus(false);
     syncActiveTab();
 }
 
 function handleTabUpdated(tabId, changeInfo, tab) {
     if (changeInfo.status === 'complete' && tab.active) {
         state.currentTabId = tabId;
+        updateCaptureStatus(false);
         syncActiveTab();
+    }
+}
+
+function setupCaptureControls() {
+    captureToggleEl = document.getElementById('capture-toggle');
+    captureStatusEl = document.getElementById('capture-status');
+
+    if (!captureToggleEl || !captureStatusEl) {
+        console.warn('TypeRight Side Panel: Capture controls missing from DOM');
+        return;
+    }
+
+    captureToggleEl.addEventListener('change', () => {
+        const enabled = captureToggleEl.checked;
+
+        if (!state.port || state.currentTabId == null) {
+            updateCaptureStatus(false, 'No active tab is available.');
+            return;
+        }
+
+        setCaptureStatusLoading(true, enabled ? 'Requesting page access…' : 'Turning page checking off…');
+        state.port.postMessage({
+            action: 'setCaptureEnabled',
+            tabId: state.currentTabId,
+            enabled,
+        });
+    });
+
+    updateCaptureStatus(false);
+}
+
+function requestCaptureStatus() {
+    if (!state.port || state.currentTabId == null) {
+        updateCaptureStatus(false, 'No active tab is available.');
+        return;
+    }
+
+    setCaptureStatusLoading(true, 'Checking page access…');
+    state.port.postMessage({
+        action: 'getCaptureStatus',
+        tabId: state.currentTabId,
+    });
+}
+
+function handleCaptureStatus(message) {
+    if (message.tabId != null && message.tabId !== state.currentTabId) {
+        return;
+    }
+
+    if (message.error) {
+        updateCaptureStatus(false, message.error);
+        return;
+    }
+
+    updateCaptureStatus(Boolean(message.enabled));
+}
+
+function setCaptureStatusLoading(isLoading, message) {
+    if (captureToggleEl) {
+        captureToggleEl.disabled = Boolean(isLoading);
+    }
+
+    if (captureStatusEl && message) {
+        captureStatusEl.textContent = message;
+        captureStatusEl.classList.remove('is-error');
+    }
+}
+
+function updateCaptureStatus(enabled, errorMessage = '') {
+    state.captureEnabled = Boolean(enabled);
+
+    if (captureToggleEl) {
+        captureToggleEl.checked = state.captureEnabled;
+        captureToggleEl.disabled = false;
+    }
+
+    if (!captureStatusEl) {
+        return;
+    }
+
+    if (errorMessage) {
+        captureStatusEl.textContent = errorMessage;
+        captureStatusEl.classList.add('is-error');
+    } else {
+        captureStatusEl.textContent = state.captureEnabled
+            ? 'On for this page. Sensitive-looking fields are skipped.'
+            : 'Checking is off for this page.';
+        captureStatusEl.classList.remove('is-error');
     }
 }
 
@@ -186,6 +284,8 @@ function syncActiveTab() {
                     action: 'requestHistory',
                     tabId: state.currentTabId,
                 });
+
+                requestCaptureStatus();
             }
         });
     } catch (error) {
@@ -459,7 +559,7 @@ function createEmptyState() {
     div.innerHTML = `
     <div class="empty-state-icon">📝</div>
     <p class="empty-state-text">No suggestions yet</p>
-    <p class="empty-state-hint">Start typing in any text field, and TypeRight will check your grammar automatically!</p>
+        <p class="empty-state-hint">Enable page checking above, then type in an eligible field.</p>
   `;
     return div;
 }

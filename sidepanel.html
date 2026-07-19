@@ -97,6 +97,65 @@
             gap: var(--spacing-xs);
         }
 
+        .capture-controls {
+            background: var(--color-surface);
+            padding: var(--spacing-md);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-sm);
+            margin-bottom: var(--spacing-md);
+        }
+
+        .capture-controls-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: var(--spacing-md);
+        }
+
+        .capture-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .capture-disclosure {
+            color: var(--color-text-secondary);
+            font-size: 12px;
+            line-height: 1.4;
+            margin-top: var(--spacing-xs);
+        }
+
+        .capture-toggle {
+            align-items: center;
+            color: var(--color-primary);
+            cursor: pointer;
+            display: flex;
+            flex: 0 0 auto;
+            font-size: 13px;
+            font-weight: 600;
+            gap: var(--spacing-xs);
+        }
+
+        .capture-toggle input {
+            accent-color: var(--color-primary);
+            height: 16px;
+            width: 16px;
+        }
+
+        .capture-toggle input:disabled {
+            cursor: not-allowed;
+        }
+
+        .capture-status {
+            color: var(--color-text-secondary);
+            font-size: 12px;
+            margin-top: var(--spacing-sm);
+            min-height: 16px;
+        }
+
+        .capture-status.is-error {
+            color: var(--color-danger);
+        }
+
         .model-controls-row {
             display: grid;
             grid-template-columns: auto 1fr;
@@ -451,6 +510,21 @@
         <p class="subtitle">AI-powered grammar checker</p>
     </header> -->
 
+    <div class="capture-controls">
+        <div class="capture-controls-header">
+            <div>
+                <div class="capture-title">Page checking</div>
+                <p class="capture-disclosure">Off by default. When enabled, eligible field text is sent to your local
+                    Ollama service for checking.</p>
+            </div>
+            <label class="capture-toggle">
+                <input id="capture-toggle" type="checkbox">
+                <span>Enable on this page</span>
+            </label>
+        </div>
+        <div id="capture-status" class="capture-status">Checking is off for this page.</div>
+    </div>
+
     <div class="model-controls">
         <div class="model-controls-row">
             <label for="model-select">Model</label>
@@ -473,8 +547,7 @@
         <div class="empty-state">
             <div class="empty-state-icon">📝</div>
             <p class="empty-state-text">No suggestions yet</p>
-            <p class="empty-state-hint">Start typing in any text field, and TypeRight will check your grammar
-                automatically!</p>
+            <p class="empty-state-hint">Enable page checking above, then type in an eligible field.</p>
         </div>
     </div>
 

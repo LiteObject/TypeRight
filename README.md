@@ -10,6 +10,7 @@
 - **Multiple Input Support** - Works with text inputs, textareas, and contenteditable elements
 - **Beautiful UI** - Clean side panel interface for viewing suggestions
 - **Model Picker** - Choose any installed Ollama model directly in the side panel
+- **Page-Scoped Checks** - Capture is off by default and enabled one active page at a time
 - **Privacy-Focused** - All processing happens locally on your machine
 
 ## Prerequisites
@@ -38,15 +39,17 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
    ```
    
    The server should now be running on `http://localhost:11434`
-   3. **Open the TypeRight side panel** by clicking the TypeRight icon (or via Chrome's side panel menu). Keep it open to allow checks.
+   3. **Open the TypeRight side panel** by clicking the TypeRight icon (or via Chrome's side panel menu).
 
-   4. **Start typing** in any text field
+   4. **Enable page checking** in the panel. TypeRight asks to work with the active page only after this action.
 
-   5. **Pause for about 2 seconds** after you stop typing. You'll see "Checking with Ollama…" in the panel while the request runs.
+   5. **Start typing** in an eligible text field. Password fields and fields marked with sensitive-looking names or autocomplete tokens are skipped.
 
-   6. **Review suggestions** in the side panel (it stays open between checks)
+   6. **Pause for about 2 seconds** after you stop typing. Eligible text is sent to your local Ollama endpoint while page checking is enabled.
 
-   7. **Copy or dismiss** suggestions:
+   7. **Review suggestions** in the side panel (it stays open between checks)
+
+   8. **Copy or dismiss** suggestions:
 
 1. **Clone or download this repository**
    ```bash
@@ -79,15 +82,17 @@ Before using TypeRight, you need to have Ollama installed and running on your ma
 
 2. **Navigate to any webpage** with text input fields (e.g., Gmail, Twitter, Google Docs)
 
-3. **Open the TypeRight side panel** (click the TypeRight toolbar icon or use Chrome's side panel menu). Checks only run while the panel is open.
+3. **Open the TypeRight side panel** (click the TypeRight toolbar icon or use Chrome's side panel menu). Page checking is off until you enable it.
 
    - Use the **Model** dropdown at the top of the panel to pick from your installed Ollama models.
    - Click **Refresh** if you just pulled a new model and want it to appear.
+   - Use **Enable on this page** only when you want eligible field text checked on the active page.
 
 4. **Click into a text field** (input, textarea, or contenteditable) that contains at least **25 characters**. You can type or paste to reach the threshold.
 
    - The field must be part of the main page (embedded editors inside iframes are not yet supported).
    - Make sure the cursor is inside the field—TypeRight only monitors the element you’ve interacted with most recently.
+   - TypeRight skips password fields, fields with sensitive-looking metadata, and fields marked with `data-typeright-ignore`.
 
 5. **Pause briefly**—TypeRight will send the text to Ollama about 2 seconds after the last keystroke or immediately after the click if the text is already long enough. You'll see "Checking with Ollama…" in the side panel while it runs.
 
@@ -245,9 +250,12 @@ TypeRight works on virtually any website with text input fields, including:
 
 ## Privacy & Security
 
-- All text processing happens **locally** on your machine
-- No data is sent to external servers
-- Uses your own Ollama instance
+- Page checking is **off by default** and must be enabled for each active page
+- The content script is prepared only after a user action; the extension does not inject it into every URL at install time
+- Only eligible fields are considered, and password fields plus sensitive-looking fields are skipped
+- When page checking is enabled, eligible text is sent to your local Ollama instance at `http://localhost:11434`
+- No data is sent to external servers by TypeRight
+- Do not enter secrets or confidential information into any field being checked; metadata-based filtering cannot identify every sensitive field
 - Open source - audit the code yourself
 - No tracking or analytics
 

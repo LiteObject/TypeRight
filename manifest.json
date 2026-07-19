@@ -11,19 +11,12 @@
     "sidePanel"
   ],
   "host_permissions": [
-    "http://*/*",
-    "https://*/*"
+    "http://localhost:11434/*",
+    "http://127.0.0.1:11434/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
-  "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"],
-      "run_at": "document_end"
-    }
-  ],
   "side_panel": {
     "default_path": "sidepanel.html"
   },

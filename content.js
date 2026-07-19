@@ -18,10 +18,17 @@ const state = {
     lastObservedText: new Map(),
     requestVersions: new Map(),
     currentRequests: new Map(),
+    elementsById: new Map(),
     requestSequence: 0,
     activeElement: null,
     sidePanelOpen: false,
+    captureEnabled: false,
 };
+
+const elementIdentities = new WeakMap();
+let nextElementIdentity = 0;
+
+const SENSITIVE_FIELD_PATTERN = /\b(?:password|passwd|passcode|secret|token|api[-_ ]?key|access[-_ ]?key|private[-_ ]?key|auth(?:orization)?|credential(?:s)?|ssn|social[-_ ]?security|tax[-_ ]?id|security[-_ ]?code|verification[-_ ]?code|one[-_ ]?time|otp|pin|cvv|cvc|cc[-_ ]?(?:number|name|exp|csc|cvv)|card[-_ ]?number|credit[-_ ]?card|bank|routing[-_ ]?number|account[-_ ]?number)\b/i;
 
 // Selectors for editable elements
 const EDITABLE_SELECTORS = [
@@ -61,12 +68,11 @@ function handleInput(event) {
         return;
     }
 
-    if (!state.sidePanelOpen) {
+    state.activeElement = element;
+
+    if (!state.sidePanelOpen || !state.captureEnabled || isSensitiveElement(element)) {
         return;
     }
-
-    // Update active element
-    state.activeElement = element;
 
     scheduleGrammarCheck(element, { immediate: false });
 }
@@ -79,7 +85,10 @@ function handleFocus(event) {
 
     if (isEditableElement(element)) {
         state.activeElement = element;
-        scheduleGrammarCheck(element, { immediate: true, reason: 'focus' });
+
+        if (state.sidePanelOpen && state.captureEnabled && !isSensitiveElement(element)) {
+            scheduleGrammarCheck(element, { immediate: true, reason: 'focus' });
+        }
     }
 }
 
@@ -91,14 +100,46 @@ function handleClick(event) {
     }
 
     state.activeElement = element;
-    scheduleGrammarCheck(element, { immediate: true, reason: 'click' });
+
+    if (state.sidePanelOpen && state.captureEnabled && !isSensitiveElement(element)) {
+        scheduleGrammarCheck(element, { immediate: true, reason: 'click' });
+    }
 }
 
 /**
  * Check if element is editable
  */
 function isEditableElement(element) {
-    return element.matches(EDITABLE_SELECTORS);
+    return Boolean(element && typeof element.matches === 'function' && element.matches(EDITABLE_SELECTORS));
+}
+
+function isSensitiveElement(element) {
+    if (!element || typeof element.getAttribute !== 'function') {
+        return true;
+    }
+
+    const type = (element.getAttribute('type') || '').toLowerCase();
+    if (type === 'password' || type === 'hidden') {
+        return true;
+    }
+
+    if (element.hasAttribute('data-typeright-ignore')) {
+        return true;
+    }
+
+    const identifyingAttributes = [
+        'name',
+        'id',
+        'class',
+        'autocomplete',
+        'aria-label',
+        'placeholder',
+    ];
+
+    return identifyingAttributes.some((attributeName) => {
+        const value = element.getAttribute(attributeName);
+        return value ? SENSITIVE_FIELD_PATTERN.test(value) : false;
+    });
 }
 
 function getEditableTarget(node) {
@@ -125,15 +166,16 @@ function getEditableTarget(node) {
  * Generate unique ID for element
  */
 function getElementId(element) {
-    if (element.id) return element.id;
-    if (element.name) return `name-${element.name}`;
+    let elementId = elementIdentities.get(element);
 
-    // Generate a stable ID based on element properties
-    const tagName = element.tagName.toLowerCase();
-    const className = element.className || '';
-    const index = Array.from(document.querySelectorAll(tagName)).indexOf(element);
+    if (!elementId) {
+        nextElementIdentity += 1;
+        elementId = `element-${nextElementIdentity}`;
+        elementIdentities.set(element, elementId);
+    }
 
-    return `${tagName}-${className}-${index}`;
+    state.elementsById.set(elementId, element);
+    return elementId;
 }
 
 /**
@@ -150,6 +192,10 @@ function getTextContent(element) {
  * Check grammar for the given element
  */
 async function checkGrammar(element) {
+    if (!state.sidePanelOpen || !state.captureEnabled || isSensitiveElement(element)) {
+        return;
+    }
+
     const elementId = getElementId(element);
 
     if (state.typingTimers.has(elementId)) {
@@ -277,6 +323,18 @@ function handleMessage(message, sender, sendResponse) {
             case 'sidePanelStatus':
                 updateSidePanelStatus(Boolean(message.isOpen));
                 break;
+
+            case 'setCaptureEnabled':
+                if (typeof sendResponse === 'function') {
+                    sendResponse({ enabled: updateCaptureStatus(Boolean(message.enabled)) });
+                }
+                return true;
+
+            case 'getCaptureStatus':
+                if (typeof sendResponse === 'function') {
+                    sendResponse({ enabled: state.captureEnabled });
+                }
+                return true;
         }
     } catch (error) {
         console.error('TypeRight: Error handling message:', error);
@@ -286,7 +344,7 @@ function handleMessage(message, sender, sendResponse) {
 }
 
 function scheduleGrammarCheck(element, { immediate } = { immediate: false }) {
-    if (!state.sidePanelOpen || !isEditableElement(element)) {
+    if (!state.sidePanelOpen || !state.captureEnabled || !isEditableElement(element) || isSensitiveElement(element)) {
         return;
     }
 
@@ -370,6 +428,26 @@ function updateElementVersion(elementId, text) {
     return state.requestVersions.get(elementId) || 0;
 }
 
+function clearCheckState() {
+    state.typingTimers.forEach((timer) => clearTimeout(timer));
+    state.typingTimers.clear();
+    state.lastCheckedText.clear();
+    state.lastObservedText.clear();
+    state.requestVersions.clear();
+    state.currentRequests.clear();
+    state.elementsById.clear();
+}
+
+function updateCaptureStatus(isEnabled) {
+    state.captureEnabled = Boolean(isEnabled) && state.sidePanelOpen;
+
+    if (!state.captureEnabled) {
+        clearCheckState();
+    }
+
+    return state.captureEnabled;
+}
+
 function createRequestId() {
     state.requestSequence += 1;
     return `${Date.now()}-${state.requestSequence}`;
@@ -408,12 +486,8 @@ function updateSidePanelStatus(isOpen) {
     state.sidePanelOpen = isOpen;
 
     if (!isOpen) {
-        state.typingTimers.forEach((timer) => clearTimeout(timer));
-        state.typingTimers.clear();
-        state.lastCheckedText.clear();
-        state.lastObservedText.clear();
-        state.requestVersions.clear();
-        state.currentRequests.clear();
+        state.captureEnabled = false;
+        clearCheckState();
     }
 }
 
@@ -421,23 +495,8 @@ function updateSidePanelStatus(isOpen) {
  * Find element by ID
  */
 function findElementById(elementId) {
-    // Try direct ID lookup
-    let element = document.getElementById(elementId);
-    if (element) return element;
-
-    // Try name attribute
-    if (elementId.startsWith('name-')) {
-        const name = elementId.substring(5);
-        element = document.querySelector(`[name="${name}"]`);
-        if (element) return element;
-    }
-
-    // Check if it's the active element
-    if (state.activeElement && getElementId(state.activeElement) === elementId) {
-        return state.activeElement;
-    }
-
-    return null;
+    const element = state.elementsById.get(elementId);
+    return element && element.isConnected ? element : null;
 }
 
 /**

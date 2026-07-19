@@ -107,8 +107,20 @@ chrome.runtime.onConnect.addListener((port) => {
             }
 
             const targetTabId = message.tabId ?? tabId;
+            const previousTabId = state.sidePanelPorts.get(portKey)?.tabId ?? null;
 
             if (targetTabId != null) {
+                if (previousTabId != null && previousTabId !== targetTabId) {
+                    try {
+                        chrome.tabs.sendMessage(previousTabId, {
+                            action: 'sidePanelStatus',
+                            isOpen: false,
+                        }).catch(() => { });
+                    } catch (error) {
+                        console.debug('TypeRight: Previous tab was unavailable while changing active tabs:', error);
+                    }
+                }
+
                 state.sidePanelPorts.set(portKey, { port, tabId: targetTabId });
             }
 
@@ -187,6 +199,14 @@ chrome.runtime.onConnect.addListener((port) => {
                     }
                     break;
 
+                case 'getCaptureStatus':
+                    await handleCaptureStatusRequest(port, targetTabId);
+                    break;
+
+                case 'setCaptureEnabled':
+                    await handleCaptureToggleRequest(port, targetTabId, Boolean(message.enabled));
+                    break;
+
                 case 'requestModels':
                     await handleModelListRequest(port, { forceRefresh: false });
                     break;
@@ -209,6 +229,114 @@ chrome.runtime.onConnect.addListener((port) => {
         }
     }
 });
+
+function isMissingContentScriptError(error) {
+    const message = error?.message || '';
+    return /Receiving end does not exist|Could not establish connection|message port closed/i.test(message);
+}
+
+async function queryCaptureStatus(tabId) {
+    if (tabId == null) {
+        return false;
+    }
+
+    try {
+        const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'getCaptureStatus',
+        });
+        return response?.enabled === true;
+    } catch (error) {
+        if (!isMissingContentScriptError(error)) {
+            console.warn('TypeRight: Failed to query page capture status:', error);
+        }
+        return false;
+    }
+}
+
+async function ensureContentScript(tabId) {
+    try {
+        const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'getCaptureStatus',
+        });
+
+        if (response) {
+            return;
+        }
+    } catch (error) {
+        if (!isMissingContentScriptError(error)) {
+            console.debug('TypeRight: Injecting content script after probe failed:', error);
+        }
+    }
+
+    await chrome.scripting.executeScript({
+        target: { tabId },
+        files: ['content.js'],
+    });
+}
+
+function formatCaptureError(error) {
+    const message = error?.message || '';
+
+    if (/Cannot access contents of url|The extensions gallery cannot be scripted|No tab with id/i.test(message)) {
+        return 'TypeRight cannot access this page. Try a regular web page in the active tab.';
+    }
+
+    return message || 'Unable to enable page checking.';
+}
+
+async function handleCaptureStatusRequest(port, tabId) {
+    const enabled = await queryCaptureStatus(tabId);
+    port.postMessage({
+        action: 'captureStatus',
+        tabId,
+        enabled,
+    });
+}
+
+async function handleCaptureToggleRequest(port, tabId, enabled) {
+    if (tabId == null) {
+        port.postMessage({
+            action: 'captureStatus',
+            tabId,
+            enabled: false,
+            error: 'No active tab is available.',
+        });
+        return;
+    }
+
+    try {
+        if (enabled) {
+            await ensureContentScript(tabId);
+            await chrome.tabs.sendMessage(tabId, {
+                action: 'sidePanelStatus',
+                isOpen: true,
+            });
+        }
+
+        const response = await chrome.tabs.sendMessage(tabId, {
+            action: 'setCaptureEnabled',
+            enabled,
+        });
+
+        if (response?.enabled !== enabled) {
+            throw new Error('The page did not acknowledge the capture setting.');
+        }
+
+        port.postMessage({
+            action: 'captureStatus',
+            tabId,
+            enabled,
+        });
+    } catch (error) {
+        console.error('TypeRight: Failed to change page capture status:', error);
+        port.postMessage({
+            action: 'captureStatus',
+            tabId,
+            enabled: false,
+            error: formatCaptureError(error),
+        });
+    }
+}
 
 /**
  * Listen for messages from content script
@@ -610,6 +738,14 @@ async function handleOpenSidePanel(tabId) {
  * Handle extension icon click
  */
 chrome.action.onClicked.addListener(async (tab) => {
+    if (tab.id != null) {
+        try {
+            await ensureContentScript(tab.id);
+        } catch (error) {
+            console.debug('TypeRight: Content script will be injected after page access is granted:', error);
+        }
+    }
+
     await chrome.sidePanel.open({ tabId: tab.id });
 });
 
