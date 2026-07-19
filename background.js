@@ -634,10 +634,11 @@ async function handleModelListRequest(port, { forceRefresh }) {
     try {
         port.postMessage({ action: 'modelList', loading: true, selectedModel: state.selectedModel || CONFIG.model });
         const models = await getAvailableModels({ forceRefresh });
+        const selectedModel = await ensureSelectedModelIsAvailable(models);
         port.postMessage({
             action: 'modelList',
             models,
-            selectedModel: state.selectedModel || CONFIG.model,
+            selectedModel,
         });
     } catch (error) {
         const friendlyMessage = (error?.message || '').includes('Failed to fetch')
@@ -650,6 +651,26 @@ async function handleModelListRequest(port, { forceRefresh }) {
             error: friendlyMessage,
         });
     }
+}
+
+async function ensureSelectedModelIsAvailable(models) {
+    const availableModelNames = new Set(
+        models
+            .map((model) => model?.name)
+            .filter((name) => typeof name === 'string' && name.trim()),
+    );
+
+    if (state.selectedModel && availableModelNames.has(state.selectedModel)) {
+        return state.selectedModel;
+    }
+
+    const fallbackModel = models.find((model) => typeof model?.name === 'string' && model.name.trim())?.name;
+    if (!fallbackModel) {
+        return state.selectedModel || CONFIG.model;
+    }
+
+    await applySelectedModel(fallbackModel, { persist: true, broadcast: true });
+    return state.selectedModel;
 }
 
 async function handleModelSelectionRequest(port, modelName) {
