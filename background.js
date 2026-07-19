@@ -737,16 +737,19 @@ async function handleOpenSidePanel(tabId) {
 /**
  * Handle extension icon click
  */
-chrome.action.onClicked.addListener(async (tab) => {
-    if (tab.id != null) {
-        try {
-            await ensureContentScript(tab.id);
-        } catch (error) {
-            console.debug('TypeRight: Content script will be injected after page access is granted:', error);
-        }
+chrome.action.onClicked.addListener((tab) => {
+    if (tab.id == null) {
+        return;
     }
 
-    await chrome.sidePanel.open({ tabId: tab.id });
+    const openPanelPromise = chrome.sidePanel.open({ tabId: tab.id });
+    openPanelPromise.catch((error) => {
+        console.error('TypeRight: Failed to open side panel:', error);
+    });
+
+    ensureContentScript(tab.id).catch((error) => {
+        console.debug('TypeRight: Content script will be injected after page access is granted:', error);
+    });
 });
 
 console.log('TypeRight: Background service worker initialized');

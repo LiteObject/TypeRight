@@ -13,6 +13,7 @@ const state = {
     selectedModel: null,
     modelsLoading: false,
     captureEnabled: false,
+    captureStatusTimeoutId: null,
 };
 
 let captureToggleEl = null;
@@ -28,6 +29,8 @@ const MODEL_STATUS_MESSAGES = {
     success: (model) => `Using model: ${model}`,
     empty: 'No models detected. Use "ollama pull <model>" then click Refresh.',
 };
+
+const CAPTURE_STATUS_TIMEOUT_MS = 5000;
 
 function initialize() {
     console.log('TypeRight Side Panel: Initialized');
@@ -155,12 +158,17 @@ function setupCaptureControls() {
             return;
         }
 
-        setCaptureStatusLoading(true, enabled ? 'Requesting page access…' : 'Turning page checking off…');
-        state.port.postMessage({
-            action: 'setCaptureEnabled',
-            tabId: state.currentTabId,
-            enabled,
-        });
+        beginCaptureStatusRequest(enabled ? 'Requesting page access…' : 'Turning page checking off…');
+
+        try {
+            state.port.postMessage({
+                action: 'setCaptureEnabled',
+                tabId: state.currentTabId,
+                enabled,
+            });
+        } catch (error) {
+            updateCaptureStatus(false, 'Unable to update page access. Please try again.');
+        }
     });
 
     updateCaptureStatus(false);
@@ -172,11 +180,16 @@ function requestCaptureStatus() {
         return;
     }
 
-    setCaptureStatusLoading(true, 'Checking page access…');
-    state.port.postMessage({
-        action: 'getCaptureStatus',
-        tabId: state.currentTabId,
-    });
+    beginCaptureStatusRequest('Checking page access…');
+
+    try {
+        state.port.postMessage({
+            action: 'getCaptureStatus',
+            tabId: state.currentTabId,
+        });
+    } catch (error) {
+        updateCaptureStatus(false, 'Unable to check page access. Please try again.');
+    }
 }
 
 function handleCaptureStatus(message) {
@@ -203,7 +216,19 @@ function setCaptureStatusLoading(isLoading, message) {
     }
 }
 
+function beginCaptureStatusRequest(message) {
+    clearTimeout(state.captureStatusTimeoutId);
+    setCaptureStatusLoading(true, message);
+
+    state.captureStatusTimeoutId = setTimeout(() => {
+        state.captureStatusTimeoutId = null;
+        updateCaptureStatus(false, 'Unable to check page access. Please try again.');
+    }, CAPTURE_STATUS_TIMEOUT_MS);
+}
+
 function updateCaptureStatus(enabled, errorMessage = '') {
+    clearTimeout(state.captureStatusTimeoutId);
+    state.captureStatusTimeoutId = null;
     state.captureEnabled = Boolean(enabled);
 
     if (captureToggleEl) {
